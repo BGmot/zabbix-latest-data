@@ -10,7 +10,7 @@ Files in this repository fix the problem to some extent.
 On the server where your Zabbix WebUI installed execute following.
 ```
 mkdir /tmp/zabbix-latest-data && cd /tmp/zabbix-latest-data
-curl -L -o zabbix-latest-data.zip https://github.com/BGmot/zabbix-latest-data/archive/5.4.0.zip
+curl -L -o zabbix-latest-data.zip https://github.com/BGmot/zabbix-latest-data/archive/refs/tags/5.4.0.zip
 unzip zabbix-latest-data.zip
 # Modify ZABBIX_INSTALL_PATH in zabbix-latest-data.sh if needed.
 sudo bash latest-data-patch.sh
