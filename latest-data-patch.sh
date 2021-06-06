@@ -6,7 +6,6 @@ set -o
 
 ZABBIX_INSTALL_PATH=/usr/share/zabbix
 
-TMPDIR=/tmp/`date +%s`
 VERSION=5.4.0
 ZABBIX_INSTALLED_VERSION=`grep ZABBIX_VERSION ${ZABBIX_INSTALL_PATH}/include/defines.inc.php | cut -d\' -f 4`
 
@@ -15,11 +14,6 @@ then
   echo "Need Zabbix version ${VERSION} to be able to patch, found ${ZABBIX_INSTALLED_VERSION}"
   exit -1
 fi
-
-mkdir $TMPDIR && cd $TMPDIR
-curl -L -o zabbix-latest-data-${VERSION}.zip https://github.com/BGmot/zabbix-latest-data/archive/${VERSION}.zip
-unzip zabbix-${BGVERSION}.zip
-cd zabbix-${BGVERSION}
 
 echo 'Patching WebUI files...'
 cp ${ZABBIX_INSTALL_PATH}/app/controllers/CControllerLatest.php ${ZABBIX_INSTALL_PATH}/app/controllers/CControllerLatest.php-`date +%s`.bak
