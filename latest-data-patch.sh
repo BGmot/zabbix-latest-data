@@ -20,7 +20,7 @@ cp ${ZABBIX_INSTALL_PATH}/app/controllers/CControllerLatest.php ${ZABBIX_INSTALL
 cp CControllerLatest.php ${ZABBIX_INSTALL_PATH}/app/controllers
 cp ${ZABBIX_INSTALL_PATH}/app/controllers/CControllerLatestView.php ${ZABBIX_INSTALL_PATH}/app/controllers/CControllerLatestView.php-`date +%s`.bak
 cp CControllerLatestView.php ${ZABBIX_INSTALL_PATH}/app/controllers
-cp ${ZABBIX_INSTALL_PATH}/app/controllers/CControllerLatestViewRefresh.php ${ZABBIX_INSTALL_PATH}/app/controllers/CControllerLatestViewRefresh.php-date +%s`.bak
+cp ${ZABBIX_INSTALL_PATH}/app/controllers/CControllerLatestViewRefresh.php ${ZABBIX_INSTALL_PATH}/app/controllers/CControllerLatestViewRefresh.php-`date +%s`.bak
 cp CControllerLatestViewRefresh.php ${ZABBIX_INSTALL_PATH}/app/controllers
 cp ${ZABBIX_INSTALL_PATH}/app/controllers/CControllerProfileUpdate.php ${ZABBIX_INSTALL_PATH}/app/controllers/CControllerProfileUpdate.php-`date +%s`.bak
 cp CControllerProfileUpdate.php ${ZABBIX_INSTALL_PATH}/app/controllers
