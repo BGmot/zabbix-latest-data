@@ -6,6 +6,9 @@ Today with 5.4 we have only long list of items, even cannot filter out effective
 
 Files in this repository fix the problem to some extent.
 
+### Changes
+Find all the changes in zabbix-latest-data.diff.
+
 ### Installation
 On the server where your Zabbix WebUI installed execute following.
 ```
