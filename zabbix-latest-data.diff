@@ -1,0 +1,708 @@
+diff --git a/app/controllers/CControllerLatest.php b/app/controllers/CControllerLatest.php
+index 41a49b3..5da70ae 100644
+--- a/app/controllers/CControllerLatest.php
++++ b/app/controllers/CControllerLatest.php
+@@ -55,6 +55,8 @@ abstract class CControllerLatest extends CController {
+ 			'monitored_hosts' => true,
+ 			'preservekeys' => true
+ 		]);
++		$hostids = array_keys($hosts);
++		$hostids_index = array_flip($hostids);
+ 
+ 		$search_limit = CSettingsHelper::get(CSettingsHelper::SEARCH_LIMIT);
+ 		$history_period = timeUnitToSeconds(CSettingsHelper::get(CSettingsHelper::HISTORY_PERIOD));
+@@ -125,6 +127,70 @@ abstract class CControllerLatest extends CController {
+ 			$items = [];
+ 		}
+ 
++		$tags_combined = [];
++		foreach ($items as $itemid => $item) {
++			$tag_combined = $item['hostid'];
++			for($i=0; $i < count($item['tags']); $i++) {
++				if ($i == 0) {
++					$tag_combined .= '-';
++				}
++			       	else {
++					$tag_combined .= ', ';
++				}
++				if ($item['tags'][$i]['value'] != '') {
++					$tag_combined .= $item['tags'][$i]['tag'] . ':' . $item['tags'][$i]['value'];
++				}
++				else {
++					$tag_combined .= $item['tags'][$i]['tag'];
++				}
++			}
++			$tags_combined += [$tag_combined];
++		}
++		sort($tags_combined);
++
++		$tags_combined_size = [];
++		$items_grouped = [];
++		foreach ($items as $itemid => $item) {
++			if (!array_key_exists($item['hostid'], $tags_combined_size)) {
++				$tags_combined_size[$item['hostid']] = [];
++			}
++			$item_tags_combined = $item['hostid'];
++			for($i=0; $i < count($item['tags']); $i++) {
++				if ($i == 0) {
++					$item_tags_combined .= '-';
++				}
++				else {
++					$item_tags_combined .= ', ';
++				}
++				if ($item['tags'][$i]['value'] != '') {
++					$item_tags_combined .= $item['tags'][$i]['tag'] . ':' . $item['tags'][$i]['value'];
++				}
++				else {
++					$item_tags_combined .= $item['tags'][$i]['tag'];
++				}
++			}
++			$items_grouped[$item['hostid']][$item_tags_combined][$itemid] = $item;
++
++			if (array_key_exists($item_tags_combined, $tags_combined_size[$item['hostid']])) {
++				$tags_combined_size[$item['hostid']][$item_tags_combined]++;
++			}
++			else {
++				$tags_combined_size[$item['hostid']][$item_tags_combined] = 1;
++			}
++		}
++
++		uksort($items_grouped, function($hostid_1, $hostid_2) use ($hostids_index) {
++			return ($hostids_index[$hostid_1] <=> $hostids_index[$hostid_2]);
++		});
++
++		$items = [];
++		foreach ($items_grouped as $hostid => $item_tags_combined) {
++			ksort($item_tags_combined);
++			foreach($item_tags_combined as $item_tag_combined => $item) {
++				$items += $item;
++			}
++		}
++
+ 		$multiselect_host_data = $filter['hostids']
+ 			? API::Host()->get([
+ 				'output' => ['hostid', 'name'],
+@@ -158,4 +224,45 @@ abstract class CControllerLatest extends CController {
+ 		$prepared_data['items'] = $items;
+ 		$prepared_data['history'] = $history;
+ 	}
++
++        /**
++	 * Add collapsed data from user profile.
++	 *
++	 * @param array $prepared_data  Data returned by prepareData method.
++	 */
++        protected function addCollapsedDataFromProfile(array &$prepared_data) {
++                $collapsed_index = [];
++                $collapsed_all = true;
++
++                foreach ($prepared_data['items'] as $itemid => $item) {
++			$hostid = $item['hostid'];
++			$tag_combined = $item['hostid'];
++			for($i=0; $i < count($item['tags']); $i++) {
++				if ($i == 0) {
++					$tag_combined .= '-';
++				}
++			       	else {
++					$tag_combined .= ', ';
++				}
++				if ($item['tags'][$i]['value'] != '') {
++					$tag_combined .= $item['tags'][$i]['tag'] . ':' . $item['tags'][$i]['value'];
++				}
++				else {
++					$tag_combined .= $item['tags'][$i]['tag'];
++				}
++			}
++
++			if (array_key_exists($hostid, $collapsed_index)
++					&& array_key_exists($tag_combined, $collapsed_index[$hostid])) {
++				continue;
++			}
++
++			$collapsed = CProfile::get_str('web.latest.toggle', $tag_combined, null) !== null;
++
++			$collapsed_index[$hostid][$tag_combined] = $collapsed;
++			$collapsed_all = $collapsed_all && $collapsed;
++		}
++		$prepared_data['collapsed_index'] = $collapsed_index;
++		$prepared_data['collapsed_all'] = $collapsed_all;
++	}
+ }
+diff --git a/app/controllers/CControllerLatestView.php b/app/controllers/CControllerLatestView.php
+index 030b142..29dfff4 100644
+--- a/app/controllers/CControllerLatestView.php
++++ b/app/controllers/CControllerLatestView.php
+@@ -155,6 +155,7 @@ class CControllerLatestView extends CControllerLatest {
+ 		$paging = CPagerHelper::paginate($this->getInput('page', 1), $prepared_data['items'], ZBX_SORT_UP, $view_curl);
+ 
+ 		$this->extendData($prepared_data);
++		$this->addCollapsedDataFromProfile($prepared_data);
+ 
+ 		// display
+ 		$data = [
+diff --git a/app/controllers/CControllerLatestViewRefresh.php b/app/controllers/CControllerLatestViewRefresh.php
+index 06d15d2..0d28568 100644
+--- a/app/controllers/CControllerLatestViewRefresh.php
++++ b/app/controllers/CControllerLatestViewRefresh.php
+@@ -98,6 +98,7 @@ class CControllerLatestViewRefresh extends CControllerLatest {
+ 		$paging = CPagerHelper::paginate($this->getInput('page', 1), $prepared_data['items'], ZBX_SORT_UP, $view_curl);
+ 
+ 		$this->extendData($prepared_data);
++		$this->addCollapsedDataFromProfile($prepared_data);
+ 
+ 		// display
+ 		$data = [
+diff --git a/app/controllers/CControllerProfileUpdate.php b/app/controllers/CControllerProfileUpdate.php
+index 0c52c5d..e2e708e 100644
+--- a/app/controllers/CControllerProfileUpdate.php
++++ b/app/controllers/CControllerProfileUpdate.php
+@@ -24,8 +24,9 @@ class CControllerProfileUpdate extends CController {
+ 	protected function checkInput() {
+ 		$fields = [
+ 			'idx' =>		'required|string',
+-			'value_int' =>	'required|int32',
+-			'idx2' =>		'array_id'
++			'value_int' =>		'required|int32',
++			'idx2' =>		'array_id',
++			'value_str' =>		'array'
+ 		];
+ 
+ 		$ret = $this->validateInput($fields);
+@@ -91,6 +92,11 @@ class CControllerProfileUpdate extends CController {
+ 					$ret = $this->hasInput('idx2');
+ 					break;
+ 
++				case 'web.latest.toggle':
++                                case 'web.latest.toggle_other':
++					$ret = $this->hasInput('value_str');
++                                        break;
++
+ 				default:
+ 					$ret = false;
+ 			}
+@@ -110,6 +116,7 @@ class CControllerProfileUpdate extends CController {
+ 	protected function doAction() {
+ 		$idx = $this->getInput('idx');
+ 		$value_int = $this->getInput('value_int');
++		$value_str = $this->getInput('value_str');
+ 
+ 		DBstart();
+ 		switch ($idx) {
+@@ -124,6 +131,17 @@ class CControllerProfileUpdate extends CController {
+ 				}
+ 				break;
+ 
++			case 'web.latest.toggle':
++				if ($value_int == 1) { // default value
++					CProfile::delete_str($idx, $value_str);
++				}
++				else {
++					foreach ($value_str as $str) {
++						CProfile::update($idx, $str, PROFILE_TYPE_STR);
++					}
++				}
++				break;
++
+ 			case 'web.dashboard.widget.navtree.item.selected':
+ 				foreach ($this->getInput('idx2') as $idx2) {
+ 					CProfile::update($idx, $value_int, PROFILE_TYPE_INT, $idx2);
+diff --git a/app/partials/monitoring.latest.view.html.php b/app/partials/monitoring.latest.view.html.php
+index f35fbae..7c34b08 100644
+--- a/app/partials/monitoring.latest.view.html.php
++++ b/app/partials/monitoring.latest.view.html.php
+@@ -31,6 +31,15 @@ $form = (new CForm('GET', 'history.php'))
+ $table = (new CTableInfo())->addClass(ZBX_STYLE_OVERFLOW_ELLIPSIS);
+ 
+ // Latest data header.
++$col_toggle_all = new CColHeader(
++	(new CSimpleButton())
++		->addClass(ZBX_STYLE_TREEVIEW)
++		->addClass('js-toggle-all')
++		->addItem(
++			(new CSpan())->addClass($data['collapsed_all'] ? ZBX_STYLE_ARROW_RIGHT : ZBX_STYLE_ARROW_DOWN)
++		)
++);
++
+ $col_check_all = new CColHeader(
+ 	(new CCheckBox('all_items'))->onClick("checkAll('".$form->getName()."', 'all_items', 'itemids');")
+ );
+@@ -45,6 +54,7 @@ $update_interval_parser = new CUpdateIntervalParser(['usermacros' => true]);
+ 
+ if ($data['filter']['show_details']) {
+ 	$table->setHeader([
++		$col_toggle_all->addStyle('width: 18px'),
+ 		$col_check_all->addStyle('width: 15px;'),
+ 		$col_host->addStyle('width: 13%'),
+ 		$col_name->addStyle('width: 21%'),
+@@ -55,26 +65,70 @@ if ($data['filter']['show_details']) {
+ 		(new CColHeader(_('Last check')))->addStyle('width: 14%'),
+ 		(new CColHeader(_('Last value')))->addStyle('width: 14%'),
+ 		(new CColHeader(_x('Change', 'noun')))->addStyle('width: 10%'),
+-		(new CColHeader(_('Tags')))->addClass(ZBX_STYLE_COLUMN_TAGS_3),
+ 		(new CColHeader())->addStyle('width: 6%'),
+ 		(new CColHeader(_('Info')))->addStyle('width: 35px')
+ 	]);
++	$table_columns = 13;
+ }
+ else {
+ 	$table->setHeader([
++		$col_toggle_all->addStyle('width: 18px'),
+ 		$col_check_all->addStyle('width: 15px'),
+ 		$col_host->addStyle('width: 17%'),
+ 		$col_name->addStyle('width: 40%'),
+ 		(new CColHeader(_('Last check')))->addStyle('width: 14%'),
+ 		(new CColHeader(_('Last value')))->addStyle('width: 14%'),
+ 		(new CColHeader(_x('Change', 'noun')))->addStyle('width: 10%'),
+-		(new CColHeader(_('Tags')))->addClass(ZBX_STYLE_COLUMN_TAGS_3),
+ 		(new CColHeader())->addStyle('width: 6%')
+ 	]);
++	$table_columns = 8;
+ }
+ 
++$last_hostid = null;
++$last_tagcombined = null;
++
+ // Latest data rows.
+ foreach ($data['items'] as $itemid => $item) {
++	$tag_combined = $item['hostid'];
++	for($i=0; $i < count($item['tags']); $i++) {
++		if ($i == 0) {
++			$tag_combined .= '-';
++		}
++		else {
++			$tag_combined .= ', ';
++		}
++		if ($item['tags'][$i]['value'] != '') {
++			$tag_combined .= $item['tags'][$i]['tag'] . ':' . $item['tags'][$i]['value'];
++		}
++		else {
++			$tag_combined .= $item['tags'][$i]['tag'];
++		}
++	}
++        $is_collapsed = $data['collapsed_index'][$item['hostid']][$tag_combined];
++
++	$is_next_host = $item['hostid'] !== $last_hostid;
++	$is_next_tag_combined = $tag_combined !== $last_tagcombined;
++
++	if ($is_next_host || $is_next_tag_combined) {
++		$host = $data['hosts'][$item['hostid']];
++		$host_name = (new CLinkAction($host['name']))
++				->addClass($host['status'] == HOST_STATUS_NOT_MONITORED ? ZBX_STYLE_RED : null)
++				->setMenuPopup(CMenuPopupHelper::getHost($item['hostid']));
++		$col_name = (new CCol([bold(preg_replace('/^\d+\-*/', '', $tag_combined))]))
++				->setColSpan($table_columns - 2);
++		$toggle_tag = (new CSimpleButton())
++				->addClass(ZBX_STYLE_TREEVIEW)
++				->addClass('js-toggle')
++				->addItem(
++					(new CSpan())->addClass($is_collapsed ? ZBX_STYLE_ARROW_RIGHT : ZBX_STYLE_ARROW_DOWN)
++				);
++		$toggle_tag->setAttribute('data-tag_combined', $tag_combined);
++                $table->addRow([$toggle_tag, '', $host_name, $col_name]);
++
++		$last_hostid = $item['hostid'];
++		$last_tagcombined = $tag_combined;
++	}
++
+ 	$is_graph = ($item['value_type'] == ITEM_VALUE_TYPE_FLOAT || $item['value_type'] == ITEM_VALUE_TYPE_UINT64);
+ 	$checkbox = (new CCheckBox('itemids['.$itemid.']', $itemid))->setEnabled($is_graph);
+ 	$state_css = ($item['state'] == ITEM_STATE_NOTSUPPORTED) ? ZBX_STYLE_GREY : null;
+@@ -199,8 +253,9 @@ foreach ($data['items'] as $itemid => $item) {
+ 		}
+ 
+ 		$table_row = new CRow([
++			'',
+ 			$checkbox,
+-			$host_name,
++			'',
+ 			(new CCol([$item_name, $item_key]))->addClass($state_css),
+ 			(new CCol($item_delay))->addClass($state_css),
+ 			(new CCol($item_history))->addClass($state_css),
+@@ -209,24 +264,29 @@ foreach ($data['items'] as $itemid => $item) {
+ 			(new CCol($last_check))->addClass($state_css),
+ 			(new CCol($last_value))->addClass($state_css),
+ 			(new CCol($change))->addClass($state_css),
+-			$data['tags'][$itemid],
+ 			$actions,
+ 			makeInformationList($item_icons)
+ 		]);
+ 	}
+ 	else {
+ 		$table_row = new CRow([
++			'',
+ 			$checkbox,
+-			$host_name,
++			'',
+ 			(new CCol($item_name))->addClass($state_css),
+ 			(new CCol($last_check))->addClass($state_css),
+ 			(new CCol($last_value))->addClass($state_css),
+ 			(new CCol($change))->addClass($state_css),
+-			$data['tags'][$itemid],
+ 			$actions
+ 		]);
+ 	}
+ 
++	$table_row->setAttribute('data-tag_combined', $tag_combined);
++
++	if ($is_collapsed) {
++		$table_row->addClass(ZBX_STYLE_DISPLAY_NONE);
++	}
++	
+ 	$table->addRow($table_row);
+ }
+ 
+diff --git a/app/views/js/monitoring.latest.view.js.php b/app/views/js/monitoring.latest.view.js.php
+index 8ec934b..95f49ec 100644
+--- a/app/views/js/monitoring.latest.view.js.php
++++ b/app/views/js/monitoring.latest.view.js.php
+@@ -66,6 +66,7 @@
+ 
+ 	latestPage.prototype.doRefresh = function(body) {
+ 		this.getCurrentForm().replaceWith(body);
++		this.liveData();
+ 		chkbxRange.init();
+ 	};
+ 
+@@ -145,6 +146,38 @@
+ 		this.unscheduleRefresh();
+ 	};
+ 
++	latestPage.prototype.toggleChevronCollapsed = function($chevron, collapsed) {
++		$chevron
++			.removeClass(collapsed ? '<?= ZBX_STYLE_ARROW_DOWN ?>' : '<?= ZBX_STYLE_ARROW_RIGHT ?>')
++			.addClass(collapsed ? '<?= ZBX_STYLE_ARROW_RIGHT ?>' : '<?= ZBX_STYLE_ARROW_DOWN ?>');
++	};
++
++	latestPage.prototype.isChevronCollapsed = function($chevron) {
++		return $chevron.hasClass('<?= ZBX_STYLE_ARROW_RIGHT ?>');
++	};
++
++	latestPage.prototype.toggleTagGroup = function(group, group_id, collapsed) {
++		var $chevron = $('.js-toggle[data-' + group + '="' + group_id + '"] span'),
++			$rows = $('tr[data-' + group + '="' + group_id + '"]');
++
++		this.toggleChevronCollapsed($chevron, collapsed);
++
++		$rows.toggleClass('<?= ZBX_STYLE_DISPLAY_NONE ?>', collapsed);
++	};
++
++	latestPage.prototype.updateToggleAll = function() {
++		var self = this,
++
++			$chevron_all = $('.js-toggle-all span'),
++			collapsed_all = true;
++
++		$('.js-toggle span').each(function() {
++			collapsed_all = collapsed_all && self.isChevronCollapsed($(this));
++		});
++
++		this.toggleChevronCollapsed($chevron_all, collapsed_all);
++	};
++
+ 	latestPage.prototype.liveFilter = function() {
+ 		var $filter_hostids = $('#filter_hostids_'),
+ 			$filter_show_without_data = $('#filter_show_without_data');
+@@ -172,8 +205,81 @@
+ 		});
+ 	};
+ 
++	latestPage.prototype.liveData = function() {
++		var self = this;
++
++		$('.js-toggle-all').on('click', function() {
++			// For Opera browser with large tables, which renders table layout while showing/hiding rows.
++			$(this).closest('table').fadeTo(0, 0);
++
++			var $toggle_all = $(this),
++				collapsed_all = !self.isChevronCollapsed($toggle_all.find('span')),
++
++				updates = {
++					tag_combined: [],
++					hostid: []
++				};
++
++			$('.js-toggle').each(function() {
++				var $toggle = $(this),
++					collapsed = self.isChevronCollapsed($toggle.find('span'));
++
++				if (collapsed == collapsed_all) {
++					return;
++				}
++
++				var group = 'tag_combined',
++					group_id = $toggle.data(group);
++
++				if (group_id === undefined) {
++					group = 'hostid',
++					group_id = $toggle.data(group);
++				}
++				updates[group].push(group_id);
++
++				self.toggleTagGroup(group, group_id, collapsed_all);
++			});
++
++			self.updateToggleAll();
++
++			// For Opera browser with large tables, which renders table layout while showing/hiding rows.
++			$(this).closest('table').fadeTo(0, 1);
++
++			if (updates.tag_combined.length) {
++				updateUserProfile('web.latest.toggle', collapsed_all ? 0 : 1, [0], updates.tag_combined);
++			}
++			if (updates.hostid.length) {
++				updateUserProfile('web.latest.toggle_other', collapsed_all ? 0 : 1, updates.hostid);
++			}
++		});
++
++		$('.js-toggle').on('click', function() {
++			var $toggle = $(this),
++				collapsed = !self.isChevronCollapsed($toggle.find('span')),
++
++				group = 'tag_combined',
++				group_id = $toggle.data(group);
++
++			if (group_id === undefined) {
++				group = 'hostid',
++				group_id = $toggle.data(group);
++			}
++
++			self.toggleTagGroup(group, group_id, collapsed);
++			self.updateToggleAll();
++
++			if (group === 'tag_combined') {
++				updateUserProfile('web.latest.toggle', collapsed ? 0 : 1, [0], [group_id]);
++			}
++			else {
++				updateUserProfile('web.latest.toggle_other', collapsed ? 0 : 1, [group_id]);
++			}
++		});
++	};
++
+ 	$(function() {
+ 		window.latest_page = new latestPage();
+ 		window.latest_page.liveFilter();
++		window.latest_page.liveData();
+ 	});
+ </script>
+diff --git a/app/views/monitoring.latest.view.php b/app/views/monitoring.latest.view.php
+index 0d98394..f0150f2 100644
+--- a/app/views/monitoring.latest.view.php
++++ b/app/views/monitoring.latest.view.php
+@@ -109,7 +109,7 @@ if ($web_layout_mode == ZBX_LAYOUT_NORMAL) {
+ 
+ $widget->addItem(new CPartial('monitoring.latest.view.html', array_intersect_key($data,
+ 	array_flip(['filter', 'sort_field', 'sort_order', 'view_curl', 'paging', 'hosts', 'items', 'history', 'config',
+-		'tags'
++		'tags', 'collapsed_index', 'collapsed_all'
+ 	])
+ )));
+ 
+diff --git a/include/classes/user/CProfile.php b/include/classes/user/CProfile.php
+index fdab397..807a5a6 100644
+--- a/include/classes/user/CProfile.php
++++ b/include/classes/user/CProfile.php
+@@ -65,7 +65,14 @@ class CProfile {
+ 
+ 			foreach (self::$insert as $idx => $profile) {
+ 				foreach ($profile as $idx2 => $data) {
+-					$result &= self::insertDB($idx, $data['value'], $data['type'], $idx2);
++					if ($idx == 'web.latest.toggle') {
++						foreach($data as $t_data) {
++							$result &= self::insertDB($idx, $t_data['value'], $t_data['type'], $idx2);
++						}
++					}
++					else {
++						$result &= self::insertDB($idx, $data['value'], $data['type'], $idx2);
++					}
+ 				}
+ 			}
+ 
+@@ -188,6 +195,57 @@ class CProfile {
+ 		return array_key_exists($idx2, self::$profiles[$idx]) ? self::$profiles[$idx][$idx2] : $default_value;
+ 	}
+ 
++	/**
++	 * Return matched idx value for current user.
++	 *
++	 * @param string    $idx           Search pattern.
++	 * @param string    $value_str     Search for this pattern in value_str field.
++	 * @param mixed     $default_value Default value if no rows was found.
++	 * @param int|null  $idx2          Numerical index will be matched against idx2 index.
++	 *
++	 * @return mixed
++	 */
++	public static function get_str($idx, $value_str, $default_value = null, $idx2 = 0) {
++		// no user data available, just return the default value
++		if (!CWebUser::$data || $value_str === null) {
++			return $default_value;
++		}
++
++		if (self::$profiles === null) {
++			self::init();
++		}
++
++		if (array_key_exists($idx, self::$profiles)) {
++			if (array_key_exists($idx2, self::$profiles[$idx])) {
++				if (array_key_exists($value_str, self::$profiles[$idx][$idx2])) {
++					return self::$profiles[$idx][$idx2][$value_str];
++				}
++			}
++			else {
++				self::$profiles[$idx][$idx2] = [];
++			}
++		}
++		else {
++			self::$profiles[$idx] = [$idx2 => []];
++		}
++
++		// Aggressive caching, cache all items matched $idx key.
++		$query = DBselect(
++			'SELECT type,value_id,value_int,value_str,idx2'.
++			' FROM profiles'.
++			' WHERE userid='.self::$userDetails['userid'].
++			' AND idx='.zbx_dbstr($idx).
++			' AND idx2='.zbx_dbstr($idx2).
++			' AND value_str='.zbx_dbstr($value_str)
++		);
++
++		while ($row = DBfetch($query)) {
++			self::$profiles[$idx][$idx2][$value_str] = $row['value_str'];
++		}
++
++		return array_key_exists($value_str, self::$profiles[$idx][$idx2]) ? self::$profiles[$idx][$idx2][$value_str] : $default_value;
++	}
++
+ 	/**
+ 	 * Returns the values stored under the given $idx as an array.
+ 	 *
+@@ -225,6 +283,27 @@ class CProfile {
+ 		}
+ 	}
+ 
++	/**
++	 * Removes profile STR values from DB and profiles cache.
++	 *
++	 * @param string 		$idx		first identifier
++	 * @param string|array  	$value_str	sting or list of strings
++	 */
++	public static function delete_str($idx, $value_str = '') {
++		if (self::$profiles === null) {
++			self::init();
++		}
++
++		$value_str = (array) $value_str;
++		self::deleteValuesStr($idx, $value_str);
++
++		if (array_key_exists($idx, self::$profiles)) {
++			foreach ($value_str as $str) {
++				unset(self::$profiles[$idx][0][$str]);
++			}
++		}
++	}
++
+ 	/**
+ 	 * Removes all values stored under the given idx.
+ 	 *
+@@ -250,6 +329,17 @@ class CProfile {
+ 		DB::delete('profiles', ['idx' => $idx, 'idx2' => $idx2, 'userid' => self::$userDetails['userid']]);
+ 	}
+ 
++	/**
++	 * Deletes the given STR values from the DB.
++	 *
++	 * @param string 	$idx
++	 * @param array 	$value_str
++	 */
++	protected static function deleteValuesStr($idx, array $value_str) {
++		// remove from DB
++		DB::delete('profiles', ['idx' => $idx, 'idx2' => 0, 'userid' => self::$userDetails['userid'], 'value_str' => $value_str]);
++	}
++
+ 	/**
+ 	 * Update favorite values in DB profiles table.
+ 	 *
+@@ -274,12 +364,28 @@ class CProfile {
+ 			'idx2' => $idx2
+ 		];
+ 
+-		$current = self::get($idx, null, $idx2);
++		if ($idx == 'web.latest.toggle') {
++			$current = self::get_str($idx, $value, null, $idx2);
++		}
++		else {
++			$current = self::get($idx, null, $idx2);
++		}
++
+ 		if (is_null($current)) {
+ 			if (!isset(self::$insert[$idx])) {
+-				self::$insert[$idx] = [];
++				if ($idx == 'web.latest.toggle') {
++					self::$insert[$idx] = [ $idx2 => [] ];
++				}
++				else {
++					self::$insert[$idx] = [];
++				}
++			}
++			if ($idx == 'web.latest.toggle') {
++				self::$insert[$idx][$idx2][$profile['value']] = $profile;
++			}
++			else {
++				self::$insert[$idx][$idx2] = $profile;
+ 			}
+-			self::$insert[$idx][$idx2] = $profile;
+ 		}
+ 		else {
+ 			if ($current != $value) {
+@@ -294,7 +400,12 @@ class CProfile {
+ 			self::$profiles[$idx] = [];
+ 		}
+ 
+-		self::$profiles[$idx][$idx2] = $value;
++		if ($idx == 'web.latest.toggle') {
++			self::$profiles[$idx][$idx2][$value] = $value;
++		}
++		else {
++			self::$profiles[$idx][$idx2] = $value;
++		}
+ 	}
+ 
+ 	/**
+diff --git a/js/main.js b/js/main.js
+index 253a479..9d5832e 100644
+--- a/js/main.js
++++ b/js/main.js
+@@ -652,6 +652,25 @@ function rm4favorites(object, objectid) {
+  * @param {string} 	value_int			Integer value
+  * @param {object} 	idx2				An array of IDs
+  */
++function updateUserProfile(idx, value_int, idx2, value_str) {
++	return sendAjaxData('zabbix.php?action=profile.update', {
++		data: {
++			idx: idx,
++			value_int: value_int,
++			idx2: idx2,
++			value_str: value_str
++		}
++	});
++}
++
++/**
++ * Toggles profile values for PROFILE_TYPE_STR.
++ *
++ * @param {string} 	idx				User profile index
++ * @param {string} 	value_str			Integer value
++ * @param {object} 	idx2				An array of IDs
++ */
++/*
+ function updateUserProfile(idx, value_int, idx2) {
+ 	return sendAjaxData('zabbix.php?action=profile.update', {
+ 		data: {
+@@ -661,7 +680,7 @@ function updateUserProfile(idx, value_int, idx2) {
+ 		}
+ 	});
+ }
+-
++*/
+ function changeWidgetState(obj, widgetId, idx) {
+ 	var widgetObj = jQuery('#' + widgetId + '_widget'),
+ 		css = switchElementClass(obj, 'btn-widget-collapse', 'btn-widget-expand'),
