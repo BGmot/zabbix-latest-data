@@ -11,6 +11,7 @@ Find all the changes in zabbix-latest-data.diff.
 
 ### Installation
 On the server where your Zabbix WebUI installed execute following.
+ATTENTION: replace 5.4.0 below with real Zabbix version you are using otherwise the installation will not proceed.
 ```
 mkdir /tmp/zabbix-latest-data && cd /tmp/zabbix-latest-data
 curl -L -o zabbix-latest-data.zip https://github.com/BGmot/zabbix-latest-data/archive/refs/tags/5.4.0.zip
