@@ -286,7 +286,7 @@ foreach ($data['items'] as $itemid => $item) {
 	if ($is_collapsed) {
 		$table_row->addClass(ZBX_STYLE_DISPLAY_NONE);
 	}
-	
+
 	$table->addRow($table_row);
 }
 

@@ -134,7 +134,7 @@ abstract class CControllerLatest extends CController {
 				if ($i == 0) {
 					$tag_combined .= '-';
 				}
-			       	else {
+				else {
 					$tag_combined .= ', ';
 				}
 				if ($item['tags'][$i]['value'] != '') {
@@ -241,7 +241,7 @@ abstract class CControllerLatest extends CController {
 				if ($i == 0) {
 					$tag_combined .= '-';
 				}
-			       	else {
+				else {
 					$tag_combined .= ', ';
 				}
 				if ($item['tags'][$i]['value'] != '') {
