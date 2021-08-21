@@ -6,7 +6,7 @@ set -o
 
 ZABBIX_INSTALL_PATH=/usr/share/zabbix
 
-VERSION=5.4.2
+VERSION=5.4.3
 ZABBIX_INSTALLED_VERSION=`grep ZABBIX_VERSION ${ZABBIX_INSTALL_PATH}/include/defines.inc.php | cut -d\' -f 4`
 
 if [ "$VERSION" != "$ZABBIX_INSTALLED_VERSION" ]
